@@ -5,8 +5,21 @@ Reduce 与质检脚本
 功能：整合 Map 结果，生成完整摘要并进行时间戳质检
 """
 
+import sys
+import os
+
+# 设置控制台输出编码为 UTF-8
+if sys.platform == "win32":
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+
 import json
 from pathlib import Path
+from contextlib import ExitStack
+
+import httpx
 import yaml
 import re
 from openai import OpenAI
@@ -114,6 +127,10 @@ def generate_reduce_summary(client: OpenAI, maps: list, config: dict) -> str:
     print(f"  输入长度: {len(prompt)} 字符")
 
     try:
+        # Reduce 阶段需要更长的超时时间
+        reduce_timeout = summarizer_config.get("reduce_timeout", 300)  # 默认 5 分钟
+        print(f"  等待 LLM 响应（超时: {reduce_timeout}s）...")
+
         response = client.chat.completions.create(
             model=summarizer_config["model"],
             messages=[
@@ -122,7 +139,7 @@ def generate_reduce_summary(client: OpenAI, maps: list, config: dict) -> str:
             ],
             max_tokens=summarizer_config["reduce_max_tokens"],
             temperature=summarizer_config.get("temperature", 0.3),
-            timeout=summarizer_config.get("timeout", 120)
+            timeout=reduce_timeout
         )
 
         summary = response.choices[0].message.content.strip()
@@ -272,31 +289,53 @@ def main():
 
         # 初始化客户端
         summarizer_config = config["summarizer"]
-        client = OpenAI(
-            base_url=summarizer_config["base_url"],
-            api_key=summarizer_config["api_key"]
+        # Reduce 阶段需要更长的超时时间
+        reduce_timeout = summarizer_config.get("reduce_timeout", 300)  # 默认 5 分钟
+        http_client_kwargs = {
+            "base_url": summarizer_config["base_url"],
+            "timeout": reduce_timeout,
+            "follow_redirects": True
+        }
+        proxy_url = (
+            summarizer_config.get("proxy")
+            or summarizer_config.get("http_proxy")
+            or summarizer_config.get("https_proxy")
         )
+        if proxy_url:
+            http_client_kwargs["proxy"] = proxy_url
 
-        print(f"\n[连接] LLM 服务: {summarizer_config['base_url']}")
-        print(f"  模型: {summarizer_config['model']}")
+        with ExitStack() as stack:
+            http_client = stack.enter_context(httpx.Client(**http_client_kwargs))
+            client = stack.enter_context(
+                OpenAI(
+                    base_url=summarizer_config["base_url"],
+                    api_key=summarizer_config["api_key"],
+                    http_client=http_client
+                )
+            )
 
-        # 生成 Reduce 摘要
-        summary = generate_reduce_summary(client, maps, config)
+            print(f"\n[连接] LLM 服务: {summarizer_config['base_url']}")
+            print(f"  模型: {summarizer_config['model']}")
+            if proxy_url:
+                print(f"  代理: {proxy_url}")
 
-        # 质检时间戳
-        qc_issues = quality_check_timestamps(summary, transcript)
+            # 生成 Reduce 摘要
+            summary = generate_reduce_summary(client, maps, config)
 
-        # 提取结构化数据
-        print("\n[提取] 结构化数据...")
-        structured_data = extract_structured_data(summary)
-        print(f"  速览点: {len(structured_data['quick_overview'])}")
-        print(f"  时间轴: {len(structured_data['timeline'])} 项")
-        print(f"  主题数: {len(structured_data['key_points'])}")
-        print(f"  结论: {len(structured_data['conclusions'])}")
-        print(f"  术语: {len(structured_data['glossary'])}")
+            # 质检时间戳
+            qc_issues = quality_check_timestamps(summary, transcript)
 
-        # 保存结果
-        save_results(summary, structured_data, qc_issues)
+            # 提取结构化数据
+            print("\n[提取] 结构化数据...")
+            structured_data = extract_structured_data(summary)
+            print(f"  速览点: {len(structured_data['quick_overview'])}")
+            print(f"  时间轴: {len(structured_data['timeline'])} 项")
+            print(f"  主题数: {len(structured_data['key_points'])}")
+            print(f"  结论: {len(structured_data['conclusions'])}")
+            print(f"  术语: {len(structured_data['glossary'])}")
+
+            # 保存结果
+            save_results(summary, structured_data, qc_issues)
 
         # 总结
         print(f"\n{'=' * 60}")
