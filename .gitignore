@@ -1,0 +1,77 @@
+# =========================
+# Python 通用忽略项
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+
+# 虚拟环境
+.venv/
+venv/
+env/
+ENV/
+*.env
+
+# 日志文件
+*.log
+logs/
+*.out
+*.err
+
+# 临时和缓存
+*.tmp
+*.temp
+*.bak
+*.swp
+.cache/
+.ipynb_checkpoints/
+*.pid
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# VSCode / PyCharm 配置
+.vscode/
+.idea/
+
+# =========================
+# 项目特定
+# =========================
+# 音频文件和转录结果（可选是否上传）
+*.wav
+*.m4a
+output/
+results/
+transcripts/
+
+# 模型缓存（huggingface / whisper）
+hf_cache/
+.whisper/
+faster-whisper/
+models/
+*.bin
+
+# 环境配置
+*.yaml
+*.yml
+config/
+*.ini
+
+# 临时中间文件
+__temp__/
+build/
+dist/
+
+# =========================
+# Git / 安全相关
+# =========================
+# 不上传包含密钥的文件
+*.key
+*.pem
+*.crt
+*.json
+token.txt

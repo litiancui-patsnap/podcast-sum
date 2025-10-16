@@ -1,0 +1,23 @@
+# Python 依赖包列表
+# 用于播客转写与摘要项目
+
+# ASR 语音识别
+faster-whisper==1.0.3
+
+# 音频处理
+pydub==0.25.1
+
+# 配置文件解析
+PyYAML==6.0.2
+
+# 中文分词（预留，用于文本分析）
+jieba==0.42.1
+
+# OpenAI 兼容客户端
+openai==1.40.1
+
+# Markdown 转 HTML
+markdown2==2.5.1
+
+# HTML 解析与处理
+beautifulsoup4==4.12.3
